@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from './Header';
 import { FolderView } from './FolderView';
@@ -87,6 +86,39 @@ export const ArtworkManager = () => {
     setFolders(folders.filter(folder => folder.id !== folderId));
   };
 
+  const editFolder = (folderId: string, newName: string) => {
+    setFolders(prevFolders => {
+      return prevFolders.map(folder => {
+        if (folder.id === folderId) {
+          // Crear el nuevo path reemplazando el último segmento
+          const newPath = [...folder.path];
+          newPath[newPath.length - 1] = newName;
+          
+          return {
+            ...folder,
+            name: newName,
+            path: newPath
+          };
+        }
+        
+        // Actualizar paths de carpetas hijas si es necesario
+        const oldPath = folders.find(f => f.id === folderId)?.path || [];
+        if (folder.path.length > oldPath.length &&
+            folder.path.slice(0, oldPath.length).every((segment, index) => segment === oldPath[index])) {
+          const updatedPath = [...folder.path];
+          updatedPath[oldPath.length - 1] = newName;
+          
+          return {
+            ...folder,
+            path: updatedPath
+          };
+        }
+        
+        return folder;
+      });
+    });
+  };
+
   const addArtwork = (artwork: Omit<Artwork, 'id' | 'folderPath'>) => {
     const newArtwork: Artwork = {
       ...artwork,
@@ -144,6 +176,7 @@ export const ArtworkManager = () => {
             folders={subfolders}
             onFolderClick={navigateToFolder}
             onDeleteFolder={deleteFolder}
+            onEditFolder={editFolder}
           />
         )}
         

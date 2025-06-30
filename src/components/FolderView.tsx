@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Folder, MoreVertical, Trash2 } from 'lucide-react';
+import { Folder, MoreVertical, Trash2, Edit } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,18 +10,30 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Folder as FolderType } from '@/types/artwork';
+import { EditFolderModal } from './EditFolderModal';
 
 interface FolderViewProps {
   folders: FolderType[];
   onFolderClick: (folderName: string) => void;
   onDeleteFolder: (folderId: string) => void;
+  onEditFolder: (folderId: string, newName: string) => void;
 }
 
 export const FolderView: React.FC<FolderViewProps> = ({
   folders,
   onFolderClick,
-  onDeleteFolder
+  onDeleteFolder,
+  onEditFolder
 }) => {
+  const [editingFolder, setEditingFolder] = useState<FolderType | null>(null);
+
+  const handleEditFolder = (newName: string) => {
+    if (editingFolder) {
+      onEditFolder(editingFolder.id, newName);
+      setEditingFolder(null);
+    }
+  };
+
   return (
     <div className="mb-8">
       <h2 className="text-lg font-semibold text-gray-800 mb-4">Carpetas</h2>
@@ -60,6 +72,13 @@ export const FolderView: React.FC<FolderViewProps> = ({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuItem
+                    onClick={() => setEditingFolder(folder)}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    <Edit size={16} className="mr-2" />
+                    Editar nombre
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => onDeleteFolder(folder.id)}
                     className="text-red-600 hover:text-red-700"
                   >
@@ -72,6 +91,14 @@ export const FolderView: React.FC<FolderViewProps> = ({
           </Card>
         ))}
       </div>
+
+      {editingFolder && (
+        <EditFolderModal
+          onClose={() => setEditingFolder(null)}
+          onEdit={handleEditFolder}
+          currentName={editingFolder.name}
+        />
+      )}
     </div>
   );
 };
