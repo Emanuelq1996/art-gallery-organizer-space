@@ -9,7 +9,7 @@ import { Upload, X } from 'lucide-react';
 
 interface UploadModalProps {
   onClose: () => void;
-  onUpload: (artwork: { title: string; description: string; imageUrl: string }) => void;
+  onUpload: (artwork: { title: string; description: string; imageUrl: string }, imageFile?: File) => void;
   currentPath: string[];
 }
 
@@ -23,6 +23,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     description: '',
     imageUrl: ''
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -42,23 +43,34 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      const url = URL.createObjectURL(file);
-      setForm({ ...form, imageUrl: url });
+      if (file.type.startsWith('image/')) {
+        setImageFile(file);
+        const url = URL.createObjectURL(file);
+        setForm({ ...form, imageUrl: url });
+      }
     }
   }, [form]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      setForm({ ...form, imageUrl: url });
+      if (file.type.startsWith('image/')) {
+        setImageFile(file);
+        const url = URL.createObjectURL(file);
+        setForm({ ...form, imageUrl: url });
+      }
     }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setForm({ ...form, imageUrl: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.title && form.imageUrl) {
-      onUpload(form);
+    if (form.title && (form.imageUrl || imageFile)) {
+      onUpload(form, imageFile || undefined);
       onClose();
     }
   };
@@ -95,10 +107,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   variant="destructive"
                   size="sm"
                   className="absolute top-2 right-2"
-                  onClick={() => setForm({ ...form, imageUrl: '' })}
+                  onClick={clearImage}
                 >
                   <X size={16} />
                 </Button>
+                {imageFile && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Archivo: {imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
+                )}
               </div>
             ) : (
               <div>
@@ -148,7 +165,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           <div className="flex space-x-3 pt-4">
             <Button
               type="submit"
-              disabled={!form.title || !form.imageUrl}
+              disabled={!form.title || (!form.imageUrl && !imageFile)}
               className="flex-1"
             >
               Subir Obra

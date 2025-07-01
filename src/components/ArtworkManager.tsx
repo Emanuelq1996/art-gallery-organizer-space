@@ -1,43 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { FolderView } from './FolderView';
 import { GalleryView } from './GalleryView';
 import { UploadModal } from './UploadModal';
 import { CreateFolderModal } from './CreateFolderModal';
 import { Folder, Artwork } from '@/types/artwork';
+import { folderService } from '@/services/folderService';
+import { artworkService } from '@/services/artworkService';
+import { useToast } from '@/hooks/use-toast';
 
 export const ArtworkManager = () => {
   const [currentPath, setCurrentPath] = useState<string[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([
-    {
-      id: '1',
-      name: 'Pinturas',
-      path: ['Pinturas'],
-      artworks: []
-    },
-    {
-      id: '2',
-      name: 'Esculturas',
-      path: ['Esculturas'],
-      artworks: []
-    },
-    {
-      id: '3',
-      name: 'Retratos',
-      path: ['Pinturas', 'Retratos'],
-      artworks: [
-        {
-          id: '1',
-          title: 'Retrato de una Dama',
-          description: 'Óleo sobre lienzo, técnica clásica con influencias renacentistas',
-          imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=600&fit=crop',
-          folderPath: ['Pinturas', 'Retratos']
-        }
-      ]
-    }
-  ]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const { toast } = useToast();
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      console.log('Loading initial data...');
+      
+      // Cargar carpetas y obras desde Firebase
+      const [foldersData, artworksData] = await Promise.all([
+        folderService.getAllFolders(),
+        artworkService.getAllArtworks()
+      ]);
+
+      // Organizar obras dentro de las carpetas correspondientes
+      const foldersWithArtworks = foldersData.map(folder => ({
+        ...folder,
+        artworks: artworksData.filter(artwork => 
+          artwork.folderPath.length === folder.path.length &&
+          artwork.folderPath.every((segment, index) => segment === folder.path[index])
+        )
+      }));
+
+      setFolders(foldersWithArtworks);
+      console.log('Initial data loaded successfully');
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los datos. Usando datos locales.",
+        variant: "destructive"
+      });
+      
+      // Fallback a datos locales si Firebase falla
+      setFolders([
+        {
+          id: '1',
+          name: 'Pinturas',
+          path: ['Pinturas'],
+          artworks: []
+        },
+        {
+          id: '2',
+          name: 'Esculturas',
+          path: ['Esculturas'],
+          artworks: []
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getCurrentFolder = () => {
     if (currentPath.length === 0) return null;
@@ -72,89 +105,235 @@ export const ArtworkManager = () => {
     setCurrentPath([]);
   };
 
-  const createFolder = (name: string) => {
-    const newFolder: Folder = {
-      id: Date.now().toString(),
-      name,
-      path: [...currentPath, name],
-      artworks: []
-    };
-    setFolders([...folders, newFolder]);
-  };
+  const createFolder = async (name: string) => {
+    try {
+      const newFolder: Omit<Folder, 'id'> = {
+        name,
+        path: [...currentPath, name],
+        artworks: []
+      };
 
-  const deleteFolder = (folderId: string) => {
-    setFolders(folders.filter(folder => folder.id !== folderId));
-  };
+      const folderId = await folderService.createFolder(newFolder);
+      
+      const folderWithId: Folder = {
+        ...newFolder,
+        id: folderId
+      };
 
-  const editFolder = (folderId: string, newName: string) => {
-    setFolders(prevFolders => {
-      return prevFolders.map(folder => {
-        if (folder.id === folderId) {
-          // Crear el nuevo path reemplazando el último segmento
-          const newPath = [...folder.path];
-          newPath[newPath.length - 1] = newName;
-          
-          return {
-            ...folder,
-            name: newName,
-            path: newPath
-          };
-        }
-        
-        // Actualizar paths de carpetas hijas si es necesario
-        const oldPath = folders.find(f => f.id === folderId)?.path || [];
-        if (folder.path.length > oldPath.length &&
-            folder.path.slice(0, oldPath.length).every((segment, index) => segment === oldPath[index])) {
-          const updatedPath = [...folder.path];
-          updatedPath[oldPath.length - 1] = newName;
-          
-          return {
-            ...folder,
-            path: updatedPath
-          };
-        }
-        
-        return folder;
+      setFolders([...folders, folderWithId]);
+      
+      toast({
+        title: "Éxito",
+        description: "Carpeta creada correctamente"
       });
-    });
-  };
-
-  const addArtwork = (artwork: Omit<Artwork, 'id' | 'folderPath'>) => {
-    const newArtwork: Artwork = {
-      ...artwork,
-      id: Date.now().toString(),
-      folderPath: currentPath
-    };
-
-    const folderIndex = folders.findIndex(folder => 
-      folder.path.length === currentPath.length &&
-      folder.path.every((segment, index) => segment === currentPath[index])
-    );
-
-    if (folderIndex !== -1) {
-      const updatedFolders = [...folders];
-      updatedFolders[folderIndex].artworks.push(newArtwork);
-      setFolders(updatedFolders);
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo crear la carpeta",
+        variant: "destructive"
+      });
     }
   };
 
-  const updateArtwork = (artworkId: string, updates: Partial<Artwork>) => {
-    const updatedFolders = folders.map(folder => ({
-      ...folder,
-      artworks: folder.artworks.map(artwork => 
-        artwork.id === artworkId ? { ...artwork, ...updates } : artwork
-      )
-    }));
-    setFolders(updatedFolders);
+  const deleteFolder = async (folderId: string) => {
+    try {
+      await folderService.deleteFolder(folderId);
+      setFolders(folders.filter(folder => folder.id !== folderId));
+      
+      toast({
+        title: "Éxito",
+        description: "Carpeta eliminada correctamente"
+      });
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la carpeta",
+        variant: "destructive"
+      });
+    }
   };
 
-  const deleteArtwork = (artworkId: string) => {
-    const updatedFolders = folders.map(folder => ({
-      ...folder,
-      artworks: folder.artworks.filter(artwork => artwork.id !== artworkId)
-    }));
-    setFolders(updatedFolders);
+  const editFolder = async (folderId: string, newName: string) => {
+    try {
+      const folderToEdit = folders.find(f => f.id === folderId);
+      if (!folderToEdit) return;
+
+      const oldPath = folderToEdit.path;
+      const newPath = [...folderToEdit.path];
+      newPath[newPath.length - 1] = newName;
+
+      // Actualizar la carpeta principal
+      await folderService.updateFolder(folderId, {
+        name: newName,
+        path: newPath
+      });
+
+      // Encontrar y actualizar carpetas hijas
+      const childFolders = folders.filter(folder => 
+        folder.path.length > oldPath.length &&
+        folder.path.slice(0, oldPath.length).every((segment, index) => segment === oldPath[index])
+      );
+
+      const batchUpdates = childFolders.map(folder => ({
+        id: folder.id,
+        data: {
+          path: folder.path.map((segment, index) => 
+            index === oldPath.length - 1 ? newName : segment
+          )
+        }
+      }));
+
+      if (batchUpdates.length > 0) {
+        await folderService.updateMultipleFolders(batchUpdates);
+      }
+
+      // Actualizar estado local
+      setFolders(prevFolders => {
+        return prevFolders.map(folder => {
+          if (folder.id === folderId) {
+            return { ...folder, name: newName, path: newPath };
+          }
+          
+          if (folder.path.length > oldPath.length &&
+              folder.path.slice(0, oldPath.length).every((segment, index) => segment === oldPath[index])) {
+            const updatedPath = [...folder.path];
+            updatedPath[oldPath.length - 1] = newName;
+            return { ...folder, path: updatedPath };
+          }
+          
+          return folder;
+        });
+      });
+
+      toast({
+        title: "Éxito",
+        description: "Carpeta editada correctamente"
+      });
+    } catch (error) {
+      console.error('Error editing folder:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo editar la carpeta",
+        variant: "destructive"
+      });
+    }
   };
+
+  const addArtwork = async (artwork: Omit<Artwork, 'id' | 'folderPath'>, imageFile?: File) => {
+    try {
+      let imageUrl = artwork.imageUrl;
+
+      // Si hay un archivo de imagen, subirlo a Firebase Storage
+      if (imageFile) {
+        imageUrl = await artworkService.uploadImage(imageFile, currentPath);
+      }
+
+      const newArtwork: Omit<Artwork, 'id'> = {
+        ...artwork,
+        imageUrl,
+        folderPath: currentPath
+      };
+
+      const artworkId = await artworkService.createArtwork(newArtwork);
+
+      // Actualizar estado local
+      const artworkWithId: Artwork = {
+        ...newArtwork,
+        id: artworkId
+      };
+
+      const folderIndex = folders.findIndex(folder => 
+        folder.path.length === currentPath.length &&
+        folder.path.every((segment, index) => segment === currentPath[index])
+      );
+
+      if (folderIndex !== -1) {
+        const updatedFolders = [...folders];
+        updatedFolders[folderIndex].artworks.push(artworkWithId);
+        setFolders(updatedFolders);
+      }
+
+      toast({
+        title: "Éxito",
+        description: "Obra agregada correctamente"
+      });
+    } catch (error) {
+      console.error('Error adding artwork:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo agregar la obra",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updateArtwork = async (artworkId: string, updates: Partial<Artwork>) => {
+    try {
+      await artworkService.updateArtwork(artworkId, updates);
+
+      const updatedFolders = folders.map(folder => ({
+        ...folder,
+        artworks: folder.artworks.map(artwork => 
+          artwork.id === artworkId ? { ...artwork, ...updates } : artwork
+        )
+      }));
+      setFolders(updatedFolders);
+
+      toast({
+        title: "Éxito",
+        description: "Obra actualizada correctamente"
+      });
+    } catch (error) {
+      console.error('Error updating artwork:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la obra",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteArtwork = async (artworkId: string) => {
+    try {
+      // Encontrar la obra para obtener la URL de la imagen
+      const artwork = folders
+        .flatMap(folder => folder.artworks)
+        .find(art => art.id === artworkId);
+
+      await artworkService.deleteArtwork(artworkId, artwork?.imageUrl);
+
+      const updatedFolders = folders.map(folder => ({
+        ...folder,
+        artworks: folder.artworks.filter(artwork => artwork.id !== artworkId)
+      }));
+      setFolders(updatedFolders);
+
+      toast({
+        title: "Éxito",
+        description: "Obra eliminada correctamente"
+      });
+    } catch (error) {
+      console.error('Error deleting artwork:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la obra",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🎨</div>
+          <p className="text-lg text-gray-600">Cargando galería...</p>
+        </div>
+      </div>
+    );
+  }
 
   const currentFolder = getCurrentFolder();
   const subfolders = currentPath.length === 0 ? getRootFolders() : getCurrentSubfolders();
