@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 
 // Configuración mock de Firebase
 const firebaseConfig = {
@@ -21,5 +22,8 @@ export const db = getFirestore(app);
 
 // Inicializar Storage
 export const storage = getStorage(app);
+
+// Inicializar Auth
+export const auth = getAuth(app);
 
 export default app;

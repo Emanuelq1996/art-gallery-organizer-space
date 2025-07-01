@@ -1,7 +1,9 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, FolderPlus, Home, ArrowLeft } from 'lucide-react';
+import { Upload, FolderPlus, Home, ArrowLeft, LogOut } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 interface HeaderProps {
   currentPath: string[];
@@ -18,6 +20,25 @@ export const Header: React.FC<HeaderProps> = ({
   onUpload,
   onCreateFolder
 }) => {
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión correctamente"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo cerrar la sesión",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="container mx-auto px-6 py-4">
@@ -48,6 +69,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 text-sm text-gray-600 mr-4">
+              <span>Bienvenido,</span>
+              <span className="font-medium">
+                {user?.displayName || user?.email || 'Usuario'}
+              </span>
+              {user?.email === 'artist@mock.com' && (
+                <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                  MOCK
+                </span>
+              )}
+            </div>
+
             {currentPath.length > 0 && (
               <Button
                 variant="outline"
@@ -76,6 +109,16 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Upload size={16} />
               <span>Subir Obra</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="flex items-center space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <LogOut size={16} />
+              <span>Salir</span>
             </Button>
           </div>
         </div>
